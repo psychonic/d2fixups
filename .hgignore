@@ -1,0 +1,7 @@
+syntax: glob
+*.opensdf
+msvc10/Release - Dota 2/*
+msvc10/Debug - Dota 2/*
+*.sdf
+*.suo
+*.vcxproj.user
