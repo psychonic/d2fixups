@@ -156,18 +156,18 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 
 void D2Fixups::InitHooks()
 {
-	SH_ADD_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::SteamIDAllowedToConnect), false);
-	SH_ADD_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::IsServerLocalOnly), false);
-	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit), false);
-	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit_Post), true);
+	SH_ADD_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);
+	SH_ADD_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
+	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
+	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
 }
 
 void D2Fixups::ShutdownHooks()
 {
-	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit_Post), true);
-	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit), false);
-	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::IsServerLocalOnly), false);
-	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::SteamIDAllowedToConnect), false);
+	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
+	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
+	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
+	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);
 }
 
 bool D2Fixups::Unload(char *error, size_t maxlen)
@@ -214,7 +214,7 @@ static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOld
 	**((int **)addr) = dota_wfp_count.GetInt();
 }
 
-bool D2Fixups::SteamIDAllowedToConnect(const CSteamID &steamId) const
+bool D2Fixups::Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const
 {
 	RETURN_META_VALUE(MRES_SUPERCEDE, true);
 }
@@ -278,19 +278,19 @@ void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType t
 	return NULL;
 }
 
-bool D2Fixups::LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
+bool D2Fixups::Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
 {
 	m_bPretendToBeLocal = true;
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
-bool D2Fixups::LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
+bool D2Fixups::Hook_LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
 {
 	m_bPretendToBeLocal = false;
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
-bool D2Fixups::IsServerLocalOnly()
+bool D2Fixups::Hook_IsServerLocalOnly()
 {
 	if (m_bPretendToBeLocal)
 	{

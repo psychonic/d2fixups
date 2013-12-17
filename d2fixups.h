@@ -57,10 +57,10 @@ public:
 	static void *FindPatchAddress(const char *sig, size_t len, PatchAddressType type);
 
 private:
-	bool SteamIDAllowedToConnect(const CSteamID &steamId) const;
-	bool IsServerLocalOnly();
-	bool LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
-	bool LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
+	bool Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const;
+	bool Hook_IsServerLocalOnly();
+	bool Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
+	bool Hook_LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 
 private:
 	bool m_bPretendToBeLocal;
