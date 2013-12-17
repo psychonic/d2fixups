@@ -28,6 +28,9 @@
 
 #include <ISmmPlugin.h>
 
+#include <steam_gameserver.h>
+#include <isteamgamecoordinator.h>
+
 enum PatchAddressType
 {
 	Engine,
@@ -61,9 +64,14 @@ private:
 	bool Hook_IsServerLocalOnly();
 	bool Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 	bool Hook_LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
+	void Hook_GameServerSteamAPIActivated();
+	void Hook_GameServerSteamAPIShutdown();
+	int Hook_GetServerVersion();
+	EGCResults Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
 
 private:
 	bool m_bPretendToBeLocal;
+	bool m_bCheatGameVersion;
 };
 
 extern D2Fixups g_D2Fixups;

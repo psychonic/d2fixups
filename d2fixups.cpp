@@ -28,12 +28,16 @@
 
 // SDK
 #include <icvar.h>
-#include <iserver.h>
-#include <steam/steamclientpublic.h>
 #include <tier0/platform.h>
 #include <tier1/fmtstr.h>
 #include <tier1/iconvar.h>
 #include <vstdlib/random.h>
+
+// Msg types have the high bit set if it's a protobuf msg (which are all that we care about).
+const int MSG_PROTOBUF_BIT = (1 << 31);
+
+const int k_EMsgGCServerVersionUpdated = 2522;
+const int k_EMsgGCServerWelcome = 4005;
 
 // SourceHook
 #include <sh_memory.h>
@@ -86,10 +90,15 @@ static struct SrcdsPatch
 SH_DECL_HOOK1(IServerGCLobby, SteamIDAllowedToConnect, const, 0, bool, const CSteamID &);
 SH_DECL_HOOK0(IVEngineServer, IsServerLocalOnly, SH_NOATTRIB, 0, bool);
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, const char *, const char *, const char *, const char *, bool, bool);
+SH_DECL_HOOK4(ISteamGameCoordinator, RetrieveMessage, SH_NOATTRIB, 0, EGCResults, uint32 *, void *, uint32, uint32 *);
+SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIActivated, SH_NOATTRIB, 0);
+SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIShutdown, SH_NOATTRIB, 0);
+SH_DECL_HOOK0(IVEngineServer, GetServerVersion, SH_NOATTRIB, 0, int);
 
 static D2Fixups g_D2Fixups;
 static IVEngineServer *engine = NULL;
 static IServerGameDLL *gamedll = NULL;
+static ISteamGameCoordinator *gamecoordinator = NULL;
 
 static class BaseAccessor : public IConCommandBaseAccessor
 {
@@ -105,6 +114,7 @@ PLUGIN_EXPOSE(D2Fixups, g_D2Fixups);
 bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	m_bPretendToBeLocal = false;
+	m_bCheatGameVersion = false;
 
 	PLUGIN_SAVEVARS();
 
@@ -160,14 +170,20 @@ void D2Fixups::InitHooks()
 	SH_ADD_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
 	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
 	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
+	SH_ADD_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), true);
+	SH_ADD_HOOK(IServerGameDLL, GameServerSteamAPIShutdown, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), false);
+	SH_ADD_HOOK(IVEngineServer, GetServerVersion, engine, SH_MEMBER(this, &D2Fixups::Hook_GetServerVersion), true);
 }
 
 void D2Fixups::ShutdownHooks()
 {
+	SH_REMOVE_HOOK(IVEngineServer, GetServerVersion, engine, SH_MEMBER(this, &D2Fixups::Hook_GetServerVersion), true);
+	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIShutdown, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), false);
+	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), true);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
 	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
-	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);
+	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);	
 }
 
 bool D2Fixups::Unload(char *error, size_t maxlen)
@@ -298,6 +314,54 @@ bool D2Fixups::Hook_IsServerLocalOnly()
 	}
 
 	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
+void D2Fixups::Hook_GameServerSteamAPIActivated()
+{
+	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
+	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
+
+	gamecoordinator = (ISteamGameCoordinator *) g_pSteamClientGameServer->GetISteamGenericInterface(hSteamUser, hSteamPipe, STEAMGAMECOORDINATOR_INTERFACE_VERSION);
+
+	SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
+
+	RETURN_META(MRES_IGNORED);
+}
+
+void D2Fixups::Hook_GameServerSteamAPIShutdown()
+{
+	SH_REMOVE_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
+
+	RETURN_META(MRES_IGNORED);
+}
+
+EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize)
+{
+	// Run manually, and then check the msg type before the game gets hold of this precious info
+	EGCResults ret = SH_CALL(gamecoordinator, &ISteamGameCoordinator::RetrieveMessage)(punMsgType, pubDest, cubDest, pcubMsgSize);
+
+	int msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
+	if (msgType == k_EMsgGCServerVersionUpdated || msgType == k_EMsgGCServerWelcome)
+	{
+		m_bCheatGameVersion = true;
+	}
+
+	RETURN_META_VALUE(MRES_SUPERCEDE, ret);
+}
+
+int D2Fixups::Hook_GetServerVersion()
+{
+	// After the initial GC welcome or a GC server update notice, the game server will
+	// query its server version from the engine to see if it's out of date. That check has
+	// the handy logic of just skipping the check if either server or GC version are 0.
+
+	if (m_bCheatGameVersion)
+	{
+		m_bCheatGameVersion = false;
+		RETURN_META_VALUE(MRES_SUPERCEDE, 0);
+	}
+
+	RETURN_META_VALUE(MRES_IGNORED, 0);
 }
 
 
