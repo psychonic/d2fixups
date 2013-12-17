@@ -84,6 +84,8 @@ static struct SrcdsPatch
 };
 
 SH_DECL_HOOK1(IServerGCLobby, SteamIDAllowedToConnect, const, 0, bool, const CSteamID &);
+SH_DECL_HOOK0(IVEngineServer, IsServerLocalOnly, SH_NOATTRIB, 0, bool);
+SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, const char *, const char *, const char *, const char *, bool, bool);
 
 static D2Fixups g_D2Fixups;
 static IVEngineServer *engine = NULL;
@@ -102,6 +104,8 @@ PLUGIN_EXPOSE(D2Fixups, g_D2Fixups);
 
 bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
+	m_bPretendToBeLocal = false;
+
 	PLUGIN_SAVEVARS();
 
 	for (int i = 0; i < ARRAYSIZE(s_Patches); ++i)
@@ -153,10 +157,16 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 void D2Fixups::InitHooks()
 {
 	SH_ADD_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::SteamIDAllowedToConnect), false);
+	SH_ADD_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::IsServerLocalOnly), false);
+	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit), false);
+	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit_Post), true);
 }
 
 void D2Fixups::ShutdownHooks()
 {
+	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit_Post), true);
+	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::LevelInit), false);
+	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::IsServerLocalOnly), false);
 	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::SteamIDAllowedToConnect), false);
 }
 
@@ -267,6 +277,29 @@ void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType t
 
 	return NULL;
 }
+
+bool D2Fixups::LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
+{
+	m_bPretendToBeLocal = true;
+	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
+bool D2Fixups::LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
+{
+	m_bPretendToBeLocal = false;
+	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
+bool D2Fixups::IsServerLocalOnly()
+{
+	if (m_bPretendToBeLocal)
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, true);
+	}
+
+	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
 
 const char *D2Fixups::GetLicense()
 {

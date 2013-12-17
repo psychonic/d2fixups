@@ -1,8 +1,9 @@
-Dota 2 Fixups currently provides fixes for the following issues that occur when attempting to run a Dota 2 server.
+Dota 2 Fixups currently provides the following fixes for issues that occur when attempting to run a Dota 2 server.
 
-* Clients receive an error when manually connecting due to not bringing lobby data with them.
-* Running dedicated Dota 2 server (using Alien Swarm's srcds.exe, for example) will shut itself down shortly after startup.
-* Waiting for players stage being skipped.
+* Fix clients receiving an error message when manually connecting to servers (due to not bringing lobby data with them).
+* Fix third-party dedicated servers shutting down shortly after startup.
+* Fix waiting for players stage being skipped.
+* Enable existing dota_local_custom_* convars for dedicated servers for easier custom addon support.
 
 
 Nicholas Hastings

@@ -58,6 +58,12 @@ public:
 
 private:
 	bool SteamIDAllowedToConnect(const CSteamID &steamId) const;
+	bool IsServerLocalOnly();
+	bool LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
+	bool LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
+
+private:
+	bool m_bPretendToBeLocal;
 };
 
 extern D2Fixups g_D2Fixups;
