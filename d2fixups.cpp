@@ -75,17 +75,6 @@ static struct SrcdsPatch
 		"Shutdown patch",
 		Engine,
 	},
-#if 0
-	// version check - doesn't work yet
-	{ "\x8B\x11\x8B\x2A\x2A\x2A\x2A\x2A\xFF\xD0\x85\xC0\x74\x2A\x8B\x2A\x2A\x2A\x2A\x2A\x85\xC9\x74",
-		23, // siglen
-		12, // offset
-		OPCODE_JZ_1, OPCODE_JMP_1,
-		NULL,
-		"Version check patch",
-		Server,
-	},
-#endif
 };
 
 SH_DECL_HOOK1(IServerGCLobby, SteamIDAllowedToConnect, const, 0, bool, const CSteamID &);
