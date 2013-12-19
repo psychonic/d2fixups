@@ -62,6 +62,7 @@ public:
 private:
 	bool Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const;
 	bool Hook_IsServerLocalOnly();
+	bool Hook_GameInit();
 	bool Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 	bool Hook_LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 	void Hook_GameServerSteamAPIActivated();

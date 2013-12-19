@@ -27,6 +27,7 @@
 #include "d2fixups.h"
 
 // SDK
+#include <filesystem.h>
 #include <icvar.h>
 #include <tier0/platform.h>
 #include <tier1/fmtstr.h>
@@ -89,6 +90,7 @@ static struct SrcdsPatch
 
 SH_DECL_HOOK1(IServerGCLobby, SteamIDAllowedToConnect, const, 0, bool, const CSteamID &);
 SH_DECL_HOOK0(IVEngineServer, IsServerLocalOnly, SH_NOATTRIB, 0, bool);
+SH_DECL_HOOK0(IServerGameDLL, GameInit, SH_NOATTRIB, 0, bool);
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, const char *, const char *, const char *, const char *, bool, bool);
 SH_DECL_HOOK4(ISteamGameCoordinator, RetrieveMessage, SH_NOATTRIB, 0, EGCResults, uint32 *, void *, uint32, uint32 *);
 SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIActivated, SH_NOATTRIB, 0);
@@ -98,6 +100,7 @@ SH_DECL_HOOK0(IVEngineServer, GetServerVersion, SH_NOATTRIB, 0, int);
 static D2Fixups g_D2Fixups;
 static IVEngineServer *engine = NULL;
 static IServerGameDLL *gamedll = NULL;
+static IFileSystem *filesystem = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
 
 static class BaseAccessor : public IConCommandBaseAccessor
@@ -155,6 +158,7 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 
 	GET_V_IFACE_CURRENT(GetServerFactory, gamedll, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
+	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 
 	ICvar *icvar;
 	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
@@ -168,6 +172,7 @@ void D2Fixups::InitHooks()
 {
 	SH_ADD_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);
 	SH_ADD_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
+	SH_ADD_HOOK(IServerGameDLL, GameInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameInit), false);
 	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
 	SH_ADD_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
 	SH_ADD_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), true);
@@ -182,6 +187,7 @@ void D2Fixups::ShutdownHooks()
 	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), true);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
+	SH_REMOVE_HOOK(IServerGameDLL, GameInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameInit), false);
 	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
 	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);	
 }
@@ -294,6 +300,74 @@ void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType t
 	return NULL;
 }
 
+bool D2Fixups::Hook_GameInit()
+{
+	static ConVarRef dota_local_custom_game("dota_local_custom_game");
+
+	// If we're not running a custom game when 'map' is executed, then nothing to do.
+	const char *pszDesiredAddon = dota_local_custom_game.GetString();
+	if (!pszDesiredAddon[0])
+	{
+		RETURN_META_VALUE(MRES_IGNORED, true);
+	}
+
+	// This should be our 'dota' gamedir.
+	char modPath[MAX_PATH];
+	filesystem->GetSearchPath("MOD", false, modPath, sizeof(modPath));
+
+	// This is the full path to the addon we want.
+	char desiredAddonPath[MAX_PATH];
+	V_snprintf(desiredAddonPath, sizeof(desiredAddonPath), "%s%s\\%s\\", modPath, "addons", pszDesiredAddon);
+
+	// If it doesn't exist, the rest is pointless.
+	if (!filesystem->IsDirectory(desiredAddonPath))
+	{
+		RETURN_META_VALUE(MRES_IGNORED, true);
+	}
+
+	char gameSearchPath[10 * MAX_PATH];
+	char addonsSearchString[MAX_PATH];	
+	CUtlStringList gameSearchPathList;
+	CUtlVector<const char *> demotedSearchPathList;
+
+	// This should match any GAME path under the addons dir.
+	V_snprintf(addonsSearchString, sizeof(addonsSearchString), "%s%s", modPath, "addons");	
+
+	filesystem->GetSearchPath("GAME", false, gameSearchPath, sizeof(gameSearchPath));
+	V_SplitString(gameSearchPath, ";", gameSearchPathList);
+
+	bool foundDesired = false;
+	FOR_EACH_VEC(gameSearchPathList, i)
+	{
+		if (V_stristr(gameSearchPathList[i], addonsSearchString))
+		{
+			if (!V_stricmp(gameSearchPathList[i], desiredAddonPath))
+			{
+				foundDesired = true;
+				continue;
+			}
+
+			// We'll re-add these to the tail.
+			demotedSearchPathList.AddToTail(gameSearchPathList[i]);
+			filesystem->RemoveSearchPath(gameSearchPathList[i], "GAME");
+		}
+	}
+
+	if (!foundDesired)
+	{
+		filesystem->AddSearchPath(desiredAddonPath, "GAME", PATH_ADD_TO_TAIL);
+	}
+
+	FOR_EACH_VEC(demotedSearchPathList, i)
+	{
+		filesystem->AddSearchPath(demotedSearchPathList[i], "GAME", PATH_ADD_TO_TAIL);
+	}
+
+	demotedSearchPathList.RemoveAll();
+
+	RETURN_META_VALUE(MRES_IGNORED, true);
+}
+
 bool D2Fixups::Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
 {
 	m_bPretendToBeLocal = true;
@@ -372,7 +446,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.8.0.0";
+	return "1.8.1.0";
 }
 
 const char *D2Fixups::GetDate()
