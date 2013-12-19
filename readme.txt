@@ -4,6 +4,7 @@ Dota 2 Fixups currently provides the following fixes for issues that occur when 
 * Fix third-party dedicated servers shutting down shortly after startup.
 * Fix waiting for players stage being skipped.
 * Enable existing dota_local_custom_* convars for dedicated servers for easier custom addon support.
+* Disables auto-exit when server version doesn't exactly match official server versions.
 
 
 Nicholas Hastings
