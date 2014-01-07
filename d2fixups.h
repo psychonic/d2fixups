@@ -31,6 +31,8 @@
 #include <steam_gameserver.h>
 #include <isteamgamecoordinator.h>
 
+#include <sh_list.h>
+
 enum PatchAddressType
 {
 	Engine,
@@ -75,6 +77,7 @@ private:
 	bool m_bPretendToBeLocal;
 	bool m_bCheatGameVersion;
 	int m_iRetrieveMsgHook;
+	SourceHook::List<int> m_GlobalHooks;
 };
 
 extern D2Fixups g_D2Fixups;
