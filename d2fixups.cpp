@@ -39,6 +39,7 @@ const int MSG_PROTOBUF_BIT = (1 << 31);
 
 const int k_EMsgGCServerVersionUpdated = 2522;
 const int k_EMsgGCServerWelcome = 4005;
+const int k_EMsgGCToServerConsoleCommand = 7418;
 
 // SourceHook
 #include <sh_memory.h>
@@ -416,13 +417,17 @@ void D2Fixups::Hook_GameServerSteamAPIShutdown()
 
 EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize)
 {
-	// Run manually, and then check the msg type before the game gets hold of this precious info
 	EGCResults ret = SH_CALL(gamecoordinator, &ISteamGameCoordinator::RetrieveMessage)(punMsgType, pubDest, cubDest, pcubMsgSize);
-
 	int msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
-	if (msgType == k_EMsgGCServerVersionUpdated || msgType == k_EMsgGCServerWelcome)
+
+	switch (msgType)
 	{
+	case k_EMsgGCToServerConsoleCommand:
+		RETURN_META_VALUE(MRES_SUPERCEDE, k_EGCResultNoMessage);
+	case k_EMsgGCServerVersionUpdated:
+	case k_EMsgGCServerWelcome:
 		m_bCheatGameVersion = true;
+		break;
 	}
 
 	RETURN_META_VALUE(MRES_SUPERCEDE, ret);
