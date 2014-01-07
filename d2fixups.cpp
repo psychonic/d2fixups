@@ -92,6 +92,8 @@ static IServerGameDLL *gamedll = NULL;
 static IFileSystem *filesystem = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
 
+ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_NONE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
+
 static class BaseAccessor : public IConCommandBaseAccessor
 {
 public:
@@ -347,9 +349,12 @@ bool D2Fixups::Hook_GameInit()
 		filesystem->AddSearchPath(desiredAddonPath, "GAME", PATH_ADD_TO_TAIL);
 	}
 
-	FOR_EACH_VEC(demotedSearchPathList, i)
+	if (dota_local_custom_allow_multiple.GetBool())
 	{
-		filesystem->AddSearchPath(demotedSearchPathList[i], "GAME", PATH_ADD_TO_TAIL);
+		FOR_EACH_VEC(demotedSearchPathList, i)
+		{
+			filesystem->AddSearchPath(demotedSearchPathList[i], "GAME", PATH_ADD_TO_TAIL);
+		}
 	}
 
 	demotedSearchPathList.RemoveAll();
