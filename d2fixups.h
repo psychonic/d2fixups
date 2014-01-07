@@ -58,6 +58,7 @@ private:
 
 public:
 	static void *FindPatchAddress(const char *sig, size_t len, PatchAddressType type);
+	static void RefreshWaitForPlayersCount();
 
 private:
 	bool Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const;

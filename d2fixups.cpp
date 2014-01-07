@@ -211,6 +211,11 @@ static ConVar dota_wfp_count( "dota_wait_for_players_to_load_count", "10", FCVAR
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue)
 {
+	D2Fixups::RefreshWaitForPlayersCount();
+}
+
+void D2Fixups::RefreshWaitForPlayersCount()
+{
 	static const char * const sig = "\x89\xB7\x2A\x2A\x2A\x2A\xA1\x2A\x2A\x2A\x2A\x8B\xF0\x39";
 	static const int siglen = 14;
 	static const int offset = 7;
@@ -373,6 +378,9 @@ bool D2Fixups::Hook_GameInit()
 bool D2Fixups::Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background)
 {
 	m_bPretendToBeLocal = true;
+
+	RefreshWaitForPlayersCount();
+
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
