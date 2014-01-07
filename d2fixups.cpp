@@ -109,6 +109,7 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 {
 	m_bPretendToBeLocal = false;
 	m_bCheatGameVersion = false;
+	m_iRetrieveMsgHook = 0;
 
 	PLUGIN_SAVEVARS();
 
@@ -174,13 +175,19 @@ void D2Fixups::InitHooks()
 void D2Fixups::ShutdownHooks()
 {
 	SH_REMOVE_HOOK(IVEngineServer, GetServerVersion, engine, SH_MEMBER(this, &D2Fixups::Hook_GetServerVersion), true);
-	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIShutdown, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), false);
-	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), true);
+	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIShutdown, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), true);
+	SH_REMOVE_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), false);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit_Post), true);
 	SH_REMOVE_HOOK(IServerGameDLL, LevelInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_LevelInit), false);
 	SH_REMOVE_HOOK(IServerGameDLL, GameInit, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameInit), false);
 	SH_REMOVE_HOOK(IVEngineServer, IsServerLocalOnly, engine, SH_MEMBER(this, &D2Fixups::Hook_IsServerLocalOnly), false);
 	SH_REMOVE_HOOK(IServerGCLobby, SteamIDAllowedToConnect, gamedll->GetServerGCLobby(), SH_MEMBER(this, &D2Fixups::Hook_SteamIDAllowedToConnect), false);	
+
+	if (m_iRetrieveMsgHook != 0)
+	{
+		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHook);
+		m_iRetrieveMsgHook = 0;
+	}
 }
 
 bool D2Fixups::Unload(char *error, size_t maxlen)
@@ -391,14 +398,18 @@ void D2Fixups::Hook_GameServerSteamAPIActivated()
 
 	gamecoordinator = (ISteamGameCoordinator *) g_pSteamClientGameServer->GetISteamGenericInterface(hSteamUser, hSteamPipe, STEAMGAMECOORDINATOR_INTERFACE_VERSION);
 
-	SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
+	m_iRetrieveMsgHook = SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
 
 	RETURN_META(MRES_IGNORED);
 }
 
 void D2Fixups::Hook_GameServerSteamAPIShutdown()
 {
-	SH_REMOVE_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
+	if (m_iRetrieveMsgHook != 0)
+	{
+		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHook);
+		m_iRetrieveMsgHook = 0;
+	}
 
 	RETURN_META(MRES_IGNORED);
 }

@@ -73,6 +73,7 @@ private:
 private:
 	bool m_bPretendToBeLocal;
 	bool m_bCheatGameVersion;
+	int m_iRetrieveMsgHook;
 };
 
 extern D2Fixups g_D2Fixups;
