@@ -41,6 +41,8 @@ const int k_EMsgGCServerVersionUpdated = 2522;
 const int k_EMsgGCServerWelcome = 4005;
 const int k_EMsgGCToServerConsoleCommand = 7418;
 
+#define MSG_TAG "[D2Fixups] "
+
 // SourceHook
 #include <sh_memory.h>
 
@@ -130,7 +132,7 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 		}
 
 		ismm->Format(error, maxlen, "Failed to setup %s.", s_Patches[i].name);
-		META_CONPRINTF("[D2Fixups] Warning: Failed to setup %s.\n", s_Patches[i].name);
+		META_CONPRINTF(MSG_TAG "Warning: Failed to setup %s.\n", s_Patches[i].name);
 	}
 
 	if (!InitGlobals(error, maxlen))
@@ -233,7 +235,7 @@ void D2Fixups::RefreshWaitForPlayersCount()
 
 	if (addr == NULL)
 	{
-		META_CONPRINT("Failed to update waiting for players count.\n");
+		META_CONPRINT(MSG_TAG "Failed to update waiting for players count.\n");
 		return;
 	}
 
