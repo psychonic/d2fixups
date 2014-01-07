@@ -435,12 +435,12 @@ int D2Fixups::Hook_GetServerVersion()
 
 const char *D2Fixups::GetLicense()
 {
-	return "None.";
+	return "GPLv2";
 }
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.8.1.0";
+	return "1.8.2.0";
 }
 
 const char *D2Fixups::GetDate()
