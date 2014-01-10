@@ -41,6 +41,8 @@ const int k_EMsgGCServerVersionUpdated = 2522;
 const int k_EMsgGCServerWelcome = 4005;
 const int k_EMsgGCToServerConsoleCommand = 7418;
 
+const int k_DontCheatGameVersion = -1;
+
 #define MSG_TAG "[D2Fixups] "
 
 // SourceHook
@@ -111,7 +113,7 @@ PLUGIN_EXPOSE(D2Fixups, g_D2Fixups);
 bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	m_bPretendToBeLocal = false;
-	m_bCheatGameVersion = false;
+	m_iCheatGameVersionFrame = k_DontCheatGameVersion;
 	m_iRetrieveMsgHook = 0;
 
 	PLUGIN_SAVEVARS();
@@ -452,7 +454,7 @@ EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uin
 		RETURN_META_VALUE(MRES_SUPERCEDE, k_EGCResultNoMessage);
 	case k_EMsgGCServerVersionUpdated:
 	case k_EMsgGCServerWelcome:
-		m_bCheatGameVersion = true;
+		m_iCheatGameVersionFrame = g_SMAPI->GetCGlobals()->framecount;
 		break;
 	}
 
@@ -465,9 +467,9 @@ int D2Fixups::Hook_GetServerVersion()
 	// query its server version from the engine to see if it's out of date. That check has
 	// the handy logic of just skipping the check if either server or GC version are 0.
 
-	if (m_bCheatGameVersion)
+	if (g_SMAPI->GetCGlobals()->framecount == m_iCheatGameVersionFrame)
 	{
-		m_bCheatGameVersion = false;
+		m_iCheatGameVersionFrame = k_DontCheatGameVersion;
 		RETURN_META_VALUE(MRES_SUPERCEDE, 0);
 	}
 
