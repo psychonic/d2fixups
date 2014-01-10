@@ -69,8 +69,8 @@ static struct SrcdsPatch
 		"Test Client shutdown patch",
 		Engine,
 	},
-	// Main Client (463)
-	{ "\x8B\x11\x8B\x42\x2A\xFF\xD0\xA3\x2A\x2A\x2A\x2A\x83\xF8\x02\x74\x2A\x85",
+	// Main Client (463) - This matches twice, but the first one is the one we want.
+	{ "\x8B\x2A\x8B\x2A\x08\xFF\xD0\xA3\x2A\x2A\x2A\x2A\x83\xF8\x02\x74\x2A\x85",
 		18, // siglen
 		15, // offset
 		OPCODE_JZ_1, OPCODE_JMP_1,
@@ -234,9 +234,9 @@ static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOld
 
 void D2Fixups::RefreshWaitForPlayersCount()
 {
-	static const char * const sig = "\x89\xB7\x2A\x2A\x2A\x2A\xA1\x2A\x2A\x2A\x2A\x8B\xF0\x39";
+	static const char * const sig = "\x89\xB7\x2A\x2A\x2A\x2A\x8B\x35\x2A\x2A\x2A\x2A\x39\xB7";
 	static const int siglen = 14;
-	static const int offset = 7;
+	static const int offset = 8;
 
 	static void *addr = NULL;
 	if (addr == NULL)
