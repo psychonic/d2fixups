@@ -75,7 +75,7 @@ private:
 
 private:
 	bool m_bPretendToBeLocal;
-	int m_iCheatGameVersionFrame;
+	int m_iCheatGameVersionCount;
 	int m_iRetrieveMsgHook;
 	SourceHook::List<int> m_GlobalHooks;
 };

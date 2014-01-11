@@ -39,9 +39,8 @@ const int MSG_PROTOBUF_BIT = (1 << 31);
 
 const int k_EMsgGCServerVersionUpdated = 2522;
 const int k_EMsgGCServerWelcome = 4005;
+const int k_EMsgGCGCToRelayConnect = 7089;
 const int k_EMsgGCToServerConsoleCommand = 7418;
-
-const int k_DontCheatGameVersion = -1;
 
 #define MSG_TAG "[D2Fixups] "
 
@@ -113,7 +112,7 @@ PLUGIN_EXPOSE(D2Fixups, g_D2Fixups);
 bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late)
 {
 	m_bPretendToBeLocal = false;
-	m_iCheatGameVersionFrame = k_DontCheatGameVersion;
+	m_iCheatGameVersionCount = 0;
 	m_iRetrieveMsgHook = 0;
 
 	PLUGIN_SAVEVARS();
@@ -450,12 +449,13 @@ EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uin
 
 	switch (msgType)
 	{
+	case k_EMsgGCGCToRelayConnect:
 	case k_EMsgGCToServerConsoleCommand:
 		RETURN_META_VALUE(MRES_SUPERCEDE, k_EGCResultNoMessage);
-	case k_EMsgGCServerVersionUpdated:
 	case k_EMsgGCServerWelcome:
-		m_iCheatGameVersionFrame = g_SMAPI->GetCGlobals()->framecount;
-		break;
+		m_iCheatGameVersionCount = 2;
+	case k_EMsgGCServerVersionUpdated:
+		m_iCheatGameVersionCount = 1;
 	}
 
 	RETURN_META_VALUE(MRES_SUPERCEDE, ret);
@@ -467,9 +467,9 @@ int D2Fixups::Hook_GetServerVersion()
 	// query its server version from the engine to see if it's out of date. That check has
 	// the handy logic of just skipping the check if either server or GC version are 0.
 
-	if (g_SMAPI->GetCGlobals()->framecount == m_iCheatGameVersionFrame)
+	if (m_iCheatGameVersionCount)
 	{
-		m_iCheatGameVersionFrame = k_DontCheatGameVersion;
+		--m_iCheatGameVersionCount;
 		RETURN_META_VALUE(MRES_SUPERCEDE, 0);
 	}
 
@@ -484,7 +484,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.9.1";
+	return "1.9.2";
 }
 
 const char *D2Fixups::GetDate()
