@@ -62,9 +62,9 @@ static struct SrcdsPatch
 	PatchAddressType ptype;
 } s_Patches[] = {
 	// Test Client
-	{ "\x5E\x5B\x74\x2A\xE8\x2A\x2A\x2A\x2A\x83\xF8\x02\x74\x2A\x32",
-		15, // siglen
-		12, // offset
+	{ "\x68\x2A\x2A\x2A\x2A\xFF\xD3\x83\x2A\x04\xE8\x2A\x2A\x2A\x2A\x80\x2A\x2A\x2A\x2A\x2A\x2A\x5B\x74\x2A\xE8",
+		26, // siglen
+		23, // offset
 		OPCODE_JZ_1, OPCODE_JMP_1,
 		NULL,
 		"Test Client shutdown patch",
