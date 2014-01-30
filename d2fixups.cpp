@@ -35,12 +35,12 @@
 #include <vstdlib/random.h>
 
 // Msg types have the high bit set if it's a protobuf msg (which are all that we care about).
-const int MSG_PROTOBUF_BIT = (1 << 31);
+const uint32 MSG_PROTOBUF_BIT = (1 << 31);
 
-const int k_EMsgGCServerVersionUpdated = 2522;
-const int k_EMsgGCServerWelcome = 4005;
-const int k_EMsgGCGCToRelayConnect = 7089;
-const int k_EMsgGCToServerConsoleCommand = 7418;
+const uint32 k_EMsgGCServerVersionUpdated = 2522;
+const uint32 k_EMsgGCServerWelcome = 4005;
+const uint32 k_EMsgGCGCToRelayConnect = 7089;
+const uint32 k_EMsgGCToServerConsoleCommand = 7418;
 
 #define MSG_TAG "[D2Fixups] "
 
@@ -445,7 +445,7 @@ void D2Fixups::Hook_GameServerSteamAPIShutdown()
 EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize)
 {
 	EGCResults ret = SH_CALL(gamecoordinator, &ISteamGameCoordinator::RetrieveMessage)(punMsgType, pubDest, cubDest, pcubMsgSize);
-	int msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
+	uint32 msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
 
 	switch (msgType)
 	{
