@@ -87,7 +87,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release - Dota 2|Win32'">
     <ClCompile>
-      <AdditionalIncludeDirectories>c:\source\steamworks\public\steam;$(MMCENTRAL)\core;$(MMCENTRAL)\core\sourcehook;$(HL2SDKDOTA)\common\protobuf-2.4.1\src;$(HL2SDKDOTA)\public;$(HL2SDKDOTA)\public\engine;$(HL2SDKDOTA)\public\game\server;$(HL2SDKDOTA)\public\tier0;$(HL2SDKDOTA)\public\tier1;$(HL2SDKDOTA)\public\vstdlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(STEAMWORKS)\public\steam;$(MMCENTRAL)\core;$(MMCENTRAL)\core\sourcehook;$(HL2SDKDOTA)\common\protobuf-2.4.1\src;$(HL2SDKDOTA)\public;$(HL2SDKDOTA)\public\engine;$(HL2SDKDOTA)\public\game\server;$(HL2SDKDOTA)\public\tier0;$(HL2SDKDOTA)\public\tier1;$(HL2SDKDOTA)\public\vstdlib;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>VERSION_SAFE_STEAM_API_INTERFACES;WIN32;NDEBUG;_WINDOWS;_USRDLL;d2fixups_EXPORTS;COMPILER_MSVC;COMPILER_MSVC32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
       <PrecompiledHeader>
@@ -112,7 +112,7 @@
       </DataExecutionPrevention>
       <TargetMachine>MachineX86</TargetMachine>
       <GenerateMapFile>true</GenerateMapFile>
-      <AdditionalLibraryDirectories>C:\source\steamworks\redistributable_bin;$(HL2SDKDOTA)\lib\public</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(STEAMWORKS)\redistributable_bin;$(HL2SDKDOTA)\lib\public</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
       <Command>copy /Y "$(TargetDir)$(TargetFileName)" "F:\HLServer\dota2\dota\addons\d2fixups"</Command>
