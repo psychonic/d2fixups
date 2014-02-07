@@ -236,9 +236,11 @@ static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOld
 
 void D2Fixups::RefreshWaitForPlayersCount()
 {
-	static const char * const sig = "\x8B\x42\x2A\x85\xC0\x74\x2A\x8B\x0D\x2A\x2A\x2A\x2A\x81\x08\x2A\x2A\x2A\x2A\x2B\x41\x2A\x8B";
-	static const int siglen = 23;
-	static const int offset = 24;
+	// Find unique string "exec lan_server.cfg\n".
+	// In same block as "tutorial_m1", above it, look for global ptr being set to new value.
+	static const char * const sig = "\xC6\x81\x2A\x2A\x2A\x2A\x01\x8D\x8E\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x08\x8B\x0D\x2A\x2A\x2A\x2A\xA3";
+	static const int siglen = 25;
+	static const int offset = 25;
 
 	static void *addr = NULL;
 	if (addr == NULL)
