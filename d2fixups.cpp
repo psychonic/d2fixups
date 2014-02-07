@@ -96,7 +96,8 @@ static IServerGameDLL *gamedll = NULL;
 static IFileSystem *filesystem = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
 
-ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_NONE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
+ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
+ConVar d2f_allow_all("d2f_allow_all", "1", FCVAR_RELEASE, "0 - Dota 2 default of disallowing players not in a lobby (all). 1 (default) - Allow all players to join");
 
 static class BaseAccessor : public IConCommandBaseAccessor
 {
@@ -226,7 +227,7 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 }
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue);
-static ConVar dota_wfp_count( "dota_wait_for_players_to_load_count", "10", FCVAR_NONE, "Number of players to wait for before starting game", true, 0.f, true, 24.f, WfpCountChanged);
+static ConVar dota_wfp_count("dota_wait_for_players_to_load_count", "10", FCVAR_RELEASE, "Number of players to wait for before starting game", true, 0.f, true, 24.f, WfpCountChanged);
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue)
 {
@@ -261,7 +262,12 @@ void D2Fixups::RefreshWaitForPlayersCount()
 
 bool D2Fixups::Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const
 {
-	RETURN_META_VALUE(MRES_SUPERCEDE, true);
+	if (d2f_allow_all.GetBool())
+	{
+		RETURN_META_VALUE(MRES_SUPERCEDE, true);
+	}
+
+	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
 void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType type)
