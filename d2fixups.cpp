@@ -236,9 +236,9 @@ static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOld
 
 void D2Fixups::RefreshWaitForPlayersCount()
 {
-	static const char * const sig = "\x89\xB7\x2A\x2A\x2A\x2A\x8B\x35\x2A\x2A\x2A\x2A\x39\xB7";
-	static const int siglen = 14;
-	static const int offset = 8;
+	static const char * const sig = "\x8B\x42\x2A\x85\xC0\x74\x2A\x8B\x0D\x2A\x2A\x2A\x2A\x81\x08\x2A\x2A\x2A\x2A\x2B\x41\x2A\x8B";
+	static const int siglen = 23;
+	static const int offset = 24;
 
 	static void *addr = NULL;
 	if (addr == NULL)
