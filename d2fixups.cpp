@@ -490,7 +490,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.9.2";
+	return "1.9.3";
 }
 
 const char *D2Fixups::GetDate()
