@@ -98,6 +98,7 @@ static ISteamGameCoordinator *gamecoordinator = NULL;
 
 ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
 ConVar d2f_allow_all("d2f_allow_all", "1", FCVAR_RELEASE, "0 - Dota 2 default of disallowing players not in a lobby (all). 1 (default) - Allow all players to join");
+ConVar d2f_blockgc_server_command("d2f_blockgc_server_command", "1", FCVAR_RELEASE);
 
 static class BaseAccessor : public IConCommandBaseAccessor
 {
@@ -115,6 +116,7 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 	m_bPretendToBeLocal = false;
 	m_iCheatGameVersionCount = 0;
 	m_iRetrieveMsgHook = 0;
+	m_iRetrieveMsgHookPost = 0;
 
 	PLUGIN_SAVEVARS();
 
@@ -209,6 +211,12 @@ void D2Fixups::ShutdownHooks()
 		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHook);
 		m_iRetrieveMsgHook = 0;
 	}
+
+	if (m_iRetrieveMsgHookPost != 0)
+	{
+		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHookPost);
+		m_iRetrieveMsgHookPost = 0;
+	}
 }
 
 bool D2Fixups::Unload(char *error, size_t maxlen)
@@ -227,7 +235,7 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 }
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue);
-static ConVar dota_wfp_count("dota_wait_for_players_to_load_count", "10", FCVAR_RELEASE, "Number of players to wait for before starting game", true, 0.f, true, 24.f, WfpCountChanged);
+static ConVar dota_wfp_count("dota_wait_for_players_to_load_count", "10", FCVAR_RELEASE, "Number of players to wait for before starting game", true, 0.f, true, 32.f, WfpCountChanged);
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue)
 {
@@ -435,6 +443,7 @@ void D2Fixups::Hook_GameServerSteamAPIActivated()
 	gamecoordinator = (ISteamGameCoordinator *) g_pSteamClientGameServer->GetISteamGenericInterface(hSteamUser, hSteamPipe, STEAMGAMECOORDINATOR_INTERFACE_VERSION);
 
 	m_iRetrieveMsgHook = SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
+	m_iRetrieveMsgHookPost = SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessagePost), true);
 
 	RETURN_META(MRES_IGNORED);
 }
@@ -447,11 +456,22 @@ void D2Fixups::Hook_GameServerSteamAPIShutdown()
 		m_iRetrieveMsgHook = 0;
 	}
 
+	if (m_iRetrieveMsgHookPost != 0)
+	{
+		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHookPost);
+		m_iRetrieveMsgHookPost = 0;
+	}
+
 	RETURN_META(MRES_IGNORED);
 }
 
 EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize)
 {
+	if (!d2f_blockgc_server_command.GetBool())
+	{
+		RETURN_META_VALUE(MRES_IGNORED, k_EGCResultOK);
+	}
+
 	EGCResults ret = SH_CALL(gamecoordinator, &ISteamGameCoordinator::RetrieveMessage)(punMsgType, pubDest, cubDest, pcubMsgSize);
 	uint32 msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
 
@@ -460,13 +480,26 @@ EGCResults D2Fixups::Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uin
 	case k_EMsgGCGCToRelayConnect:
 	case k_EMsgGCToServerConsoleCommand:
 		RETURN_META_VALUE(MRES_SUPERCEDE, k_EGCResultNoMessage);
-	case k_EMsgGCServerWelcome:
-		m_iCheatGameVersionCount = 2;
-	case k_EMsgGCServerVersionUpdated:
-		m_iCheatGameVersionCount = 1;
 	}
 
 	RETURN_META_VALUE(MRES_SUPERCEDE, ret);
+}
+
+EGCResults D2Fixups::Hook_RetrieveMessagePost(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize)
+{
+	uint32 msgType = *punMsgType & ~MSG_PROTOBUF_BIT;
+
+	switch (msgType)
+	{
+	case k_EMsgGCServerWelcome:
+		m_iCheatGameVersionCount = 2;
+		break;
+	case k_EMsgGCServerVersionUpdated:
+		m_iCheatGameVersionCount = 1;
+		break;
+	}
+
+	RETURN_META_VALUE(MRES_IGNORED, k_EGCResultOK);
 }
 
 int D2Fixups::Hook_GetServerVersion()
@@ -492,7 +525,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.9.3";
+	return "1.9.4";
 }
 
 const char *D2Fixups::GetDate()

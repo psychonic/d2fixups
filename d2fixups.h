@@ -72,11 +72,13 @@ private:
 	void Hook_GameServerSteamAPIShutdown();
 	int Hook_GetServerVersion();
 	EGCResults Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
+	EGCResults Hook_RetrieveMessagePost(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
 
 private:
 	bool m_bPretendToBeLocal;
 	int m_iCheatGameVersionCount;
 	int m_iRetrieveMsgHook;
+	int m_iRetrieveMsgHookPost;
 	SourceHook::List<int> m_GlobalHooks;
 };
 
