@@ -87,13 +87,13 @@ SH_DECL_HOOK0(IServerGameDLL, GameInit, SH_NOATTRIB, 0, bool);
 SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, const char *, const char *, const char *, const char *, bool, bool);
 SH_DECL_HOOK4(ISteamGameCoordinator, RetrieveMessage, SH_NOATTRIB, 0, EGCResults, uint32 *, void *, uint32, uint32 *);
 SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIActivated, SH_NOATTRIB, 0);
-SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIShutdown, SH_NOATTRIB, 0);
 SH_DECL_HOOK0(IVEngineServer, GetServerVersion, SH_NOATTRIB, 0, int);
 
 static D2Fixups g_D2Fixups;
 static IVEngineServer *engine = NULL;
 static IServerGameDLL *gamedll = NULL;
 static IFileSystem *filesystem = NULL;
+static IGameEventManager2 *eventmgr = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
 
 ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
@@ -147,6 +147,8 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 
 	InitHooks();
 
+	eventmgr->AddListener(this, "server_pre_shutdown", true);
+
 	return true;
 }
 
@@ -157,6 +159,7 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 
 	GET_V_IFACE_CURRENT(GetServerFactory, gamedll, IServerGameDLL, INTERFACEVERSION_SERVERGAMEDLL);
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
+	GET_V_IFACE_CURRENT(GetEngineFactory, eventmgr, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 
 	ICvar *icvar;
@@ -189,23 +192,12 @@ void D2Fixups::InitHooks()
 	h = SH_ADD_HOOK(IServerGameDLL, GameServerSteamAPIActivated, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIActivated), true);
 	m_GlobalHooks.push_back(h);
 	
-	h = SH_ADD_HOOK(IServerGameDLL, GameServerSteamAPIShutdown, gamedll, SH_MEMBER(this, &D2Fixups::Hook_GameServerSteamAPIShutdown), false);
-	m_GlobalHooks.push_back(h);
-
 	h = SH_ADD_HOOK(IVEngineServer, GetServerVersion, engine, SH_MEMBER(this, &D2Fixups::Hook_GetServerVersion), true);
 	m_GlobalHooks.push_back(h);
 }
 
-void D2Fixups::ShutdownHooks()
+void D2Fixups::UnhookGC()
 {
-	SourceHook::List<int>::iterator iter;
-	for (iter = m_GlobalHooks.begin(); iter != m_GlobalHooks.end(); ++iter)
-	{
-		SH_REMOVE_HOOK_ID(*iter);
-	}
-
-	m_GlobalHooks.clear();
-
 	if (m_iRetrieveMsgHook != 0)
 	{
 		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHook);
@@ -219,8 +211,23 @@ void D2Fixups::ShutdownHooks()
 	}
 }
 
+void D2Fixups::ShutdownHooks()
+{
+	UnhookGC();
+
+	SourceHook::List<int>::iterator iter;
+	for (iter = m_GlobalHooks.begin(); iter != m_GlobalHooks.end(); ++iter)
+	{
+		SH_REMOVE_HOOK_ID(*iter);
+	}
+
+	m_GlobalHooks.clear();
+}
+
 bool D2Fixups::Unload(char *error, size_t maxlen)
 {
+	eventmgr->RemoveListener(this);
+
 	ShutdownHooks();
 
 	for (size_t i = 0; i < ARRAYSIZE(s_Patches); ++i)
@@ -232,6 +239,14 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 	}
 
 	return true;
+}
+
+void D2Fixups::FireGameEvent(IGameEvent *pEvent)
+{
+	if (!strcmp(pEvent->GetName(), "server_pre_shutdown"))
+	{
+		UnhookGC();
+	}
 }
 
 static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOldValue);
@@ -437,6 +452,7 @@ bool D2Fixups::Hook_IsServerLocalOnly()
 
 void D2Fixups::Hook_GameServerSteamAPIActivated()
 {
+	Msg(MSG_TAG "GameServerSteamAPIActivated.\n");
 	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
 	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
 
@@ -444,23 +460,6 @@ void D2Fixups::Hook_GameServerSteamAPIActivated()
 
 	m_iRetrieveMsgHook = SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessage), false);
 	m_iRetrieveMsgHookPost = SH_ADD_HOOK(ISteamGameCoordinator, RetrieveMessage, gamecoordinator, SH_MEMBER(this, &D2Fixups::Hook_RetrieveMessagePost), true);
-
-	RETURN_META(MRES_IGNORED);
-}
-
-void D2Fixups::Hook_GameServerSteamAPIShutdown()
-{
-	if (m_iRetrieveMsgHook != 0)
-	{
-		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHook);
-		m_iRetrieveMsgHook = 0;
-	}
-
-	if (m_iRetrieveMsgHookPost != 0)
-	{
-		SH_REMOVE_HOOK_ID(m_iRetrieveMsgHookPost);
-		m_iRetrieveMsgHookPost = 0;
-	}
 
 	RETURN_META(MRES_IGNORED);
 }
@@ -525,7 +524,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "1.9.4";
+	return "1.9.5";
 }
 
 const char *D2Fixups::GetDate()

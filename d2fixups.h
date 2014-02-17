@@ -28,6 +28,8 @@
 
 #include <ISmmPlugin.h>
 
+#include <igameevents.h>
+
 #include <steam_gameserver.h>
 #include <isteamgamecoordinator.h>
 
@@ -39,7 +41,8 @@ enum PatchAddressType
 	Server,
 };
 
-class D2Fixups : public ISmmPlugin
+class D2Fixups : public ISmmPlugin,
+	public IGameEventListener2
 {
 public: // ISmmPlugin
 	bool Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool late);
@@ -53,10 +56,15 @@ public: // ISmmPlugin
 	const char *GetDate();
 	const char *GetLogTag();
 
+public: // IGameEventListener2
+	void FireGameEvent(IGameEvent *pEvent);
+	int GetEventDebugID() { return EVENT_DEBUG_ID_INIT; }
+
 private:
 	bool InitGlobals(char *error, size_t maxlen);
 	void InitHooks();
 	void ShutdownHooks();
+	void UnhookGC();
 
 public:
 	static void *FindPatchAddress(const char *sig, size_t len, PatchAddressType type);
@@ -69,7 +77,6 @@ private:
 	bool Hook_LevelInit(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 	bool Hook_LevelInit_Post(const char *pMapName, const char *pMapEntities, const char *pOldLevel, const char *pLandmarkName, bool loadGame, bool background);
 	void Hook_GameServerSteamAPIActivated();
-	void Hook_GameServerSteamAPIShutdown();
 	int Hook_GetServerVersion();
 	EGCResults Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
 	EGCResults Hook_RetrieveMessagePost(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
