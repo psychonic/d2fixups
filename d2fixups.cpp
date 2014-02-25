@@ -47,9 +47,23 @@ const uint32 k_EMsgGCToServerConsoleCommand = 7418;
 // SourceHook
 #include <sh_memory.h>
 
+// Platform specific
+#if defined(LINUX)
+#include <elf.h>
+#elif defined(OSX)
+#include <mach-o/loader.h>
+#include <mach-o/nlist.h>
+#endif
+
+#if !defined(PAGE_SIZE)
+#define PAGE_SIZE 4096
+#endif
+#define PAGE_ALIGN_UP(x) ((x + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1))
+
 #define OPCODE_JZ_1 0x74
 #define OPCODE_JMP_1 0xEB
 
+#if defined(WIN32)
 static struct SrcdsPatch
 {
 	const char *sig;
@@ -59,7 +73,7 @@ static struct SrcdsPatch
 	uint8 patchTo;
 	void *addr;
 	const char *name;
-	PatchAddressType ptype;
+	GameLibraryType ptype;
 } s_Patches[] = {
 	// Test Client
 	{ "\x68\x2A\x2A\x2A\x2A\xFF\xD3\x83\x2A\x04\xE8\x2A\x2A\x2A\x2A\x80\x2A\x2A\x2A\x2A\x2A\x2A\x5B\x74\x2A\xE8",
@@ -80,6 +94,7 @@ static struct SrcdsPatch
 		Engine,
 	},
 };
+#endif
 
 SH_DECL_HOOK1(IServerGCLobby, SteamIDAllowedToConnect, const, 0, bool, const CSteamID &);
 SH_DECL_HOOK0(IVEngineServer, IsServerLocalOnly, SH_NOATTRIB, 0, bool);
@@ -120,6 +135,7 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 
 	PLUGIN_SAVEVARS();
 
+#if defined(WIN32)
 	for (int i = 0; i < ARRAYSIZE(s_Patches); ++i)
 	{
 		void *addr = FindPatchAddress(s_Patches[i].sig, s_Patches[i].sigsize, s_Patches[i].ptype);
@@ -138,6 +154,7 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 		ismm->Format(error, maxlen, "Failed to setup %s.", s_Patches[i].name);
 		META_CONPRINTF(MSG_TAG "Warning: Failed to setup %s.\n", s_Patches[i].name);
 	}
+#endif
 
 	if (!InitGlobals(error, maxlen))
 	{
@@ -230,6 +247,7 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 
 	ShutdownHooks();
 
+#if defined(WIN32)
 	for (size_t i = 0; i < ARRAYSIZE(s_Patches); ++i)
 	{
 		if (!s_Patches[i].addr)
@@ -237,6 +255,7 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 
 		*reinterpret_cast<uint8 *>(s_Patches[i].addr) = s_Patches[i].patchFrom;
 	}
+#endif
 
 	return true;
 }
@@ -259,21 +278,64 @@ static void WfpCountChanged(IConVar *pConVar, const char *pOldValue, float flOld
 
 void D2Fixups::RefreshWaitForPlayersCount()
 {
+#if defined(WIN32)
 	// Find unique string "exec lan_server.cfg\n".
 	// In same block as "tutorial_m1", above it, look for global ptr being set to new value.
 	static const char * const sig = "\xC6\x81\x2A\x2A\x2A\x2A\x01\x8D\x8E\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x08\x8B\x0D\x2A\x2A\x2A\x2A\xA3";
 	static const int siglen = 25;
 	static const int offset = 25;
+#elif defined(LINUX)
+	// Find unique string "Loading unit...%s\n".
+	// At the beginning of the function, the first call will be to DOTAGameManager().
+	// There are two matches for the signature but either will work.
+	static const char * const sig = "\x55\x89\xE5\x57\x56\x53\x83\xEC\x2A\x8B\x5D\x08\xE8\x2A\x2A\x2A\x2A\x89\xC6\xE8";
+	static const int siglen = 20;
+	static const int offset = 13;
+	// Look for "exec lan_server.cfg\n" as on Windows
+	// Toward the beginning of the function, DOTAGameManager() is called and the mov instruction after it should have the needed offset.
+	static const int playerCountOffset = 0x3DC;
+#elif defined(OSX)
+	static const char * const symbol = "_Z15DOTAGameManagerv";
+	// This offset can be found the same way as on Linux except that that mov instruction with an offset is directly before a cmp instruction testing for a value of 10.
+	static const int playerCountOffset = 0x3DC;
+#endif
 
 	static void *addr = NULL;
+
 	if (addr == NULL)
 	{
+#if defined(WIN32)
 		addr = D2Fixups::FindPatchAddress(sig, siglen, Server);
+
+		if (addr)
+			addr = *(void **)((intp)addr + offset);
+#elif defined(LINUX) || defined(OSX)
+
+#if defined(LINUX)
+		addr = D2Fixups::FindPatchAddress(sig, siglen, Server);
+
 		if (addr)
 		{
-			addr = (void *)((intp)addr + offset);
-			SourceHook::SetMemAccess(addr, sizeof(int *), SH_MEM_READ|SH_MEM_WRITE|SH_MEM_EXEC);
+			// Get relative offset to DOTAGameManager()
+			int32_t funcOffset = *(int32_t *)((intp)addr + offset);
+
+			// Get real address of function:
+			// Address of signature + offset of relative offset + sizeof(int32_t) offset + relative offset
+			addr = (void *)((intp)addr + offset + 4 + funcOffset);
 		}
+#elif defined(OSX)
+		addr = D2Fixups::ResolveSymbol(symbol, Server);
+#endif
+
+		if (addr)
+		{
+			typedef void *(*GameManagerFn)(void);
+			void *objAddr = reinterpret_cast<GameManagerFn>(addr)();
+			
+			if (objAddr)
+				addr = (void *)((intp)objAddr + playerCountOffset);
+		}
+#endif // LINUX || OSX
 	}
 
 	if (addr == NULL)
@@ -282,7 +344,7 @@ void D2Fixups::RefreshWaitForPlayersCount()
 		return;
 	}
 
-	**((int **)addr) = dota_wfp_count.GetInt();
+	*((int *)addr) = dota_wfp_count.GetInt();
 }
 
 bool D2Fixups::Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const
@@ -295,44 +357,100 @@ bool D2Fixups::Hook_SteamIDAllowedToConnect(const CSteamID &steamId) const
 	RETURN_META_VALUE(MRES_IGNORED, true);
 }
 
-void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType type)
+bool D2Fixups::GetLibraryInfo(GameLibraryType type, LibraryInfo &libraryInfo)
 {
-	bool found;
-	char *ptr, *end;
+	void *libraryPtr;
 
-	LPCVOID startAddr;
 	switch (type)
 	{
 	case Engine:
-		startAddr = g_SMAPI->GetEngineFactory(false);
+		libraryPtr = (void*)g_SMAPI->GetEngineFactory(false);
 		break;
 	case Server:
-		startAddr = g_SMAPI->GetServerFactory(false);
+		libraryPtr = (void*)g_SMAPI->GetServerFactory(false);
 		break;
 	default:
-		return NULL;
+		return false;
 	}
 
+	if (!libraryPtr)
+		return false;
+
+#if defined(WIN32)
 	MEMORY_BASIC_INFORMATION mem;
- 
-	if (!startAddr)
-		return NULL;
- 
-	if (!VirtualQuery(startAddr, &mem, sizeof(mem)))
-		return NULL;
- 
+
+	if (!VirtualQuery(libraryPtr, &mem, sizeof(mem)))
+		return false;
+
 	IMAGE_DOS_HEADER *dos = reinterpret_cast<IMAGE_DOS_HEADER *>(mem.AllocationBase);
 	IMAGE_NT_HEADERS *pe = reinterpret_cast<IMAGE_NT_HEADERS *>((intp)dos + dos->e_lfanew);
- 
+
 	if (pe->Signature != IMAGE_NT_SIGNATURE)
 	{
 		// GetDllMemInfo failedpe points to a bad location
-		return NULL;
+		return false;
 	}
 
-	ptr = reinterpret_cast<char *>(mem.AllocationBase);
-	end = ptr + pe->OptionalHeader.SizeOfImage - len;
+	libraryInfo.base = mem.AllocationBase;
+	libraryInfo.size = pe->OptionalHeader.SizeOfImage;
+#elif defined(POSIX)
+	Dl_info info;
+	uint32_t segmentCount;
+	size_t memorySize = 0;
 
+	if (!dladdr(libraryPtr, &info) || !info.dli_fbase || !info.dli_fname)
+		return false;
+
+#if defined(LINUX)
+	Elf32_Ehdr *file = reinterpret_cast<Elf32_Ehdr *>(info.dli_fbase);
+	Elf32_Phdr *phdr = reinterpret_cast<Elf32_Phdr *>((intp)file + file->e_phoff);
+
+	if (memcmp(ELFMAG, file->e_ident, SELFMAG) != 0)
+		return false;
+
+	segmentCount = file->e_phnum;
+
+	for (uint32_t i = 0; i < segmentCount; i++)
+	{
+		if (phdr[i].p_type == PT_LOAD && phdr[i].p_flags == (PF_X|PF_R))
+			memorySize += PAGE_ALIGN_UP(phdr[i].p_filesz);
+	}
+#elif defined(OSX)
+	struct mach_header *file = reinterpret_cast<struct mach_header *>(info.dli_fbase);
+	struct segment_command *seg = reinterpret_cast<struct segment_command *>((intp)file + sizeof(mach_header));
+
+	if (file->magic != MH_MAGIC)
+		return false;
+
+	segmentCount = file->ncmds;
+
+	for (uint32_t i = 0; i < segmentCount; i++)
+	{
+		if (seg->cmd == LC_SEGMENT)
+			memorySize += seg->vmsize;
+		seg = reinterpret_cast<struct segment_command *>((intp)seg + seg->cmdsize);
+	}
+#endif // LINUX || OSX
+
+	libraryInfo.base = info.dli_fbase;
+	libraryInfo.size = memorySize;
+#endif // POSIX
+
+	return true;
+}
+
+void *D2Fixups::FindPatchAddress(const char *sig, size_t len, GameLibraryType type)
+{
+	bool found;
+	char *ptr, *end;
+	LibraryInfo info;
+
+	if (!GetLibraryInfo(type, info))
+		return NULL;
+
+	ptr = reinterpret_cast<char *>(info.base);
+	end = ptr + info.size - len;
+	
 	while (ptr < end)
 	{
 		found = true;
@@ -352,6 +470,101 @@ void *D2Fixups::FindPatchAddress(const char *sig, size_t len, PatchAddressType t
 	}
 
 	return NULL;
+}
+
+void *D2Fixups::ResolveSymbol(const char *symbol, GameLibraryType type)
+{
+	LibraryInfo info;
+
+	if (!GetLibraryInfo(type, info))
+		return NULL;
+
+#if defined(WIN32)
+	// No hidden symbols on Windows
+	return GetProcAddress((HMODULE)info.base, symbol);
+#elif defined(LINUX)
+	// Symbols are stripped on Linux, so just use dlsym() for any visible symbols
+
+	Dl_info dlinfo;
+	void *handle;
+	void *symAddr;
+
+	if (!dladdr(info.base, &dlinfo))
+		return NULL;
+
+	handle = dlopen(dlinfo.dli_fname, RTLD_NOLOAD);
+
+	if (!handle)
+		return NULL;
+
+	symAddr = dlsym(handle, symbol);
+	dlclose(handle);
+
+	return symAddr;
+#elif defined(OSX)
+
+	uintptr_t linkEditAddr;
+	struct mach_header *file;
+	struct load_command *loadcmds;
+	struct segment_command *linkEditHdr;
+	struct symtab_command *symTabHdr;
+	struct nlist *symtab;
+	const char *strtab;
+	uint32_t loadcmdCount;
+	uint32_t symbolCount;
+
+	linkEditHdr = NULL;
+	symTabHdr = NULL;
+
+	file = reinterpret_cast<struct mach_header *>(info.base);
+	loadcmds = reinterpret_cast<struct load_command *>((intp)info.base + sizeof(mach_header));
+	loadcmdCount = file->ncmds;
+
+	for (uint32_t i = 0; i < loadcmdCount; i++)
+	{
+		if (loadcmds->cmd == LC_SEGMENT && !linkEditHdr)
+		{
+			struct segment_command *seg = reinterpret_cast<struct segment_command *>(loadcmds);
+			if (strcmp(seg->segname, "__LINKEDIT") == 0)
+			{
+				linkEditHdr = seg;
+				if (symTabHdr)
+					break;
+			}
+		}
+		else if (loadcmds->cmd == LC_SYMTAB)
+		{
+			symTabHdr = reinterpret_cast<struct symtab_command *>(loadcmds);
+			if (linkEditHdr)
+				break;
+		}
+
+		loadcmds = reinterpret_cast<struct load_command *>((intp)loadcmds + loadcmds->cmdsize);
+	}
+
+	if (!linkEditHdr || !symTabHdr || !symTabHdr->symoff || !symTabHdr->stroff)
+		return NULL;
+
+	linkEditAddr = (intp)info.base + linkEditHdr->vmaddr;
+	symtab = reinterpret_cast<struct nlist *>(linkEditAddr + symTabHdr->symoff - linkEditHdr->fileoff);
+	strtab = reinterpret_cast<const char *>(linkEditAddr + symTabHdr->stroff - linkEditHdr->fileoff);
+	symbolCount = symTabHdr->nsyms;
+
+	for (uint32_t i = 0; i < symbolCount; i++)
+	{
+		struct nlist &sym = symtab[i];
+
+		// Skip undefined symbols
+		if (sym.n_sect == NO_SECT)
+			continue;
+
+		// Ignore prepended underscore on symbol name comparison
+		if (strcmp(symbol, strtab + sym.n_un.n_strx + 1) == 0)
+			return reinterpret_cast<void *>((intp)info.base + sym.n_value);
+	}
+
+	return NULL;
+#endif
 }
 
 bool D2Fixups::Hook_GameInit()

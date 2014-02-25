@@ -35,10 +35,16 @@
 
 #include <sh_list.h>
 
-enum PatchAddressType
+enum GameLibraryType
 {
 	Engine,
 	Server,
+};
+
+struct LibraryInfo
+{
+	void *base;
+	size_t size;
 };
 
 class D2Fixups : public ISmmPlugin,
@@ -67,7 +73,9 @@ private:
 	void UnhookGC();
 
 public:
-	static void *FindPatchAddress(const char *sig, size_t len, PatchAddressType type);
+	static bool GetLibraryInfo(GameLibraryType type, LibraryInfo &libraryInfo);
+	static void *FindPatchAddress(const char *sig, size_t len, GameLibraryType type);
+	static void *ResolveSymbol(const char *symbol, GameLibraryType type);
 	static void RefreshWaitForPlayersCount();
 
 private:
@@ -88,8 +96,6 @@ private:
 	int m_iRetrieveMsgHookPost;
 	SourceHook::List<int> m_GlobalHooks;
 };
-
-extern D2Fixups g_D2Fixups;
 
 PLUGIN_GLOBALVARS();
 
