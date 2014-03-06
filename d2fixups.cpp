@@ -665,7 +665,6 @@ bool D2Fixups::Hook_IsServerLocalOnly()
 
 void D2Fixups::Hook_GameServerSteamAPIActivated()
 {
-	Msg(MSG_TAG "GameServerSteamAPIActivated.\n");
 	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
 	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
 
