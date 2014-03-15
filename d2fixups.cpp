@@ -736,7 +736,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "2.0.0";
+	return "2.0.1";
 }
 
 const char *D2Fixups::GetDate()
