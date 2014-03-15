@@ -584,7 +584,7 @@ bool D2Fixups::Hook_GameInit()
 
 	// This is the full path to the addon we want.
 	char desiredAddonPath[MAX_PATH];
-	V_snprintf(desiredAddonPath, sizeof(desiredAddonPath), "%s%s\\%s\\", modPath, "addons", pszDesiredAddon);
+	V_snprintf(desiredAddonPath, sizeof(desiredAddonPath), "%s%s" CORRECT_PATH_SEPARATOR_S "%s" CORRECT_PATH_SEPARATOR_S, modPath, "addons", pszDesiredAddon);
 
 	// If it doesn't exist, the rest is pointless.
 	if (!filesystem->IsDirectory(desiredAddonPath))
