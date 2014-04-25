@@ -115,7 +115,7 @@
       <AdditionalLibraryDirectories>$(STEAMWORKS)\redistributable_bin;$(HL2SDKDOTA)\lib\public</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent>
-      <Command>copy /Y "$(TargetDir)$(TargetFileName)" "F:\HLServer\dota2\dota\addons\d2fixups"</Command>
+      <Command>copy /Y "$(TargetDir)$(TargetFileName)" "g:\HLServer\dota2\dota\addons\d2fixups"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
