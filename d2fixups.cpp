@@ -569,10 +569,10 @@ void *D2Fixups::ResolveSymbol(const char *symbol, GameLibraryType type)
 
 bool D2Fixups::Hook_GameInit()
 {
-	static ConVarRef dota_local_custom_game("dota_local_custom_game");
+	static ConVarRef dota_local_addon_game("dota_local_addon_game");
 
 	// If we're not running a custom game when 'map' is executed, then nothing to do.
-	const char *pszDesiredAddon = dota_local_custom_game.GetString();
+	const char *pszDesiredAddon = dota_local_addon_game.GetString();
 	if (!pszDesiredAddon[0])
 	{
 		RETURN_META_VALUE(MRES_IGNORED, true);
