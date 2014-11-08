@@ -64,7 +64,6 @@ public: // ISmmPlugin
 
 public: // IGameEventListener2
 	void FireGameEvent(IGameEvent *pEvent);
-	int GetEventDebugID() { return EVENT_DEBUG_ID_INIT; }
 
 private:
 	bool InitGlobals(char *error, size_t maxlen);
