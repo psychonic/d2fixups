@@ -28,13 +28,14 @@
 
 // SDK
 #include <filesystem.h>
+#include <iclient.h>
 #include <icvar.h>
+#include <iserver.h>
+#include <networksystem/inetworksystem.h>
 #include <tier0/platform.h>
 #include <tier1/fmtstr.h>
 #include <tier1/iconvar.h>
 #include <vstdlib/random.h>
-
-#include <networksystem/inetworksystem.h>
 
 // Msg types have the high bit set if it's a protobuf msg (which are all that we care about).
 const uint32 MSG_PROTOBUF_BIT = (1 << 31);
@@ -105,6 +106,7 @@ SH_DECL_HOOK6(IServerGameDLL, LevelInit, SH_NOATTRIB, 0, bool, const char *, con
 SH_DECL_HOOK4(ISteamGameCoordinator, RetrieveMessage, SH_NOATTRIB, 0, EGCResults, uint32 *, void *, uint32, uint32 *);
 SH_DECL_HOOK0_void(IServerGameDLL, GameServerSteamAPIActivated, SH_NOATTRIB, 0);
 SH_DECL_HOOK0(IVEngineServer, GetServerVersion, SH_NOATTRIB, 0, int);
+SH_DECL_HOOK1_void(IClient, Disconnect, SH_NOATTRIB, 0, int);
 
 static D2Fixups g_D2Fixups;
 static IVEngineServer *engine = NULL;
@@ -113,6 +115,7 @@ static IFileSystem *filesystem = NULL;
 static IGameEventManager2 *eventmgr = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
 static INetworkSystem *netsys = NULL;
+static IServer *server = NULL;
 
 ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
 ConVar d2f_allow_all("d2f_allow_all", "1", FCVAR_RELEASE, "0 - Dota 2 default of disallowing players not in a lobby (all). 1 (default) - Allow all players to join");
@@ -169,6 +172,12 @@ bool D2Fixups::Load(PluginId id, ISmmAPI *ismm, char *error, size_t maxlen, bool
 
 	eventmgr->AddListener(this, "server_pre_shutdown", true);
 
+	if (server)
+	{
+		eventmgr->AddListener(this, "player_connect", true);
+		eventmgr->AddListener(this, "player_disconnect", true);
+	}
+
 	return true;
 }
 
@@ -182,6 +191,21 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 	GET_V_IFACE_CURRENT(GetEngineFactory, eventmgr, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
 	GET_V_IFACE_CURRENT(GetEngineFactory, netsys, INetworkSystem, NETWORKSYSTEM_INTERFACE_VERSION);
+
+#if defined(WIN32)
+	static const char s_IServerFinder [] = "\x55\x8B\xEC\x56\xFF\x2A\x2A\xB9\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x8B\xF0";
+	static const int s_IServerOffs = 8;
+
+	server = (IServer *) FindPatchAddress(s_IServerFinder, sizeof(s_IServerFinder) - 1, GameLibraryType::Engine);
+	if (server)
+	{
+		server = *(IServer **) ((intp) server + s_IServerOffs);
+	}
+	else
+	{
+		META_CONPRINT(MSG_TAG "Warning: Failed to find IServer. SourceTV kick fix will not be available.\n");
+	}
+#endif
 
 	ICvar *icvar;
 	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
@@ -266,7 +290,15 @@ bool D2Fixups::Unload(char *error, size_t maxlen)
 
 void D2Fixups::FireGameEvent(IGameEvent *pEvent)
 {
-	if (!strcmp(pEvent->GetName(), "server_pre_shutdown"))
+	if (!strcmp(pEvent->GetName(), "player_connect"))
+	{
+		Event_PlayerConnect(pEvent);
+	}
+	else if (!strcmp(pEvent->GetName(), "player_disconnect"))
+	{
+		Event_PlayerDisconnect(pEvent);
+	}
+	else if (!strcmp(pEvent->GetName(), "server_pre_shutdown"))
 	{
 		UnhookGC();
 	}
@@ -743,6 +775,45 @@ int D2Fixups::Hook_GetServerVersion()
 	}
 
 	RETURN_META_VALUE(MRES_IGNORED, 0);
+}
+
+void D2Fixups::Event_PlayerConnect(IGameEvent *pEvent)
+{
+	int slot = pEvent->GetInt("index");
+	auto *pClient = server->GetClient(slot);
+
+	// This is too early for IsHLTV to return true, so hook all bots and check in callback.
+	if (!strcmp(pEvent->GetString("networkid"), "BOT"))
+	{
+		SH_ADD_HOOK(IClient, Disconnect, pClient, SH_MEMBER(this, &D2Fixups::Hook_OnBotDisconnect), false);
+	}
+}
+
+void D2Fixups::Event_PlayerDisconnect(IGameEvent *pEvent)
+{
+	int slot = pEvent->GetInt("index");
+	auto *pClient = server->GetClient(slot);
+
+	if (!strcmp(pEvent->GetString("networkid"), "BOT"))
+	{
+		SH_REMOVE_HOOK(IClient, Disconnect, pClient, SH_MEMBER(this, &D2Fixups::Hook_OnBotDisconnect), false);
+	}
+}
+
+void D2Fixups::Hook_OnBotDisconnect(int reason)
+{
+	auto *pClient = META_IFACEPTR(IClient);
+	// HLTV bot disconnects at hibernation time with a reason of "".
+	// All other /normal/ disconnect reasons for it will be NULL or have text.
+	if (pClient->IsHLTV())
+	{
+		if (reason == 0)
+		{
+			RETURN_META(MRES_SUPERCEDE);
+		}
+	}
+
+	RETURN_META(MRES_IGNORED);
 }
 
 

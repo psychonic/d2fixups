@@ -87,6 +87,10 @@ private:
 	int Hook_GetServerVersion();
 	EGCResults Hook_RetrieveMessage(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
 	EGCResults Hook_RetrieveMessagePost(uint32 *punMsgType, void *pubDest, uint32 cubDest, uint32 *pcubMsgSize);
+	void Hook_OnBotDisconnect(int reason);
+
+	void Event_PlayerConnect(IGameEvent *pEvent);
+	void Event_PlayerDisconnect(IGameEvent *pEvent);
 
 private:
 	bool m_bPretendToBeLocal;
