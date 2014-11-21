@@ -34,6 +34,8 @@
 #include <tier1/iconvar.h>
 #include <vstdlib/random.h>
 
+#include <networksystem/inetworksystem.h>
+
 // Msg types have the high bit set if it's a protobuf msg (which are all that we care about).
 const uint32 MSG_PROTOBUF_BIT = (1 << 31);
 
@@ -110,6 +112,7 @@ static IServerGameDLL *gamedll = NULL;
 static IFileSystem *filesystem = NULL;
 static IGameEventManager2 *eventmgr = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
+static INetworkSystem *netsys = NULL;
 
 ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
 ConVar d2f_allow_all("d2f_allow_all", "1", FCVAR_RELEASE, "0 - Dota 2 default of disallowing players not in a lobby (all). 1 (default) - Allow all players to join");
@@ -178,6 +181,7 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 	GET_V_IFACE_CURRENT(GetEngineFactory, eventmgr, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
+	GET_V_IFACE_CURRENT(GetEngineFactory, netsys, INetworkSystem, NETWORKSYSTEM_INTERFACE_VERSION);
 
 	ICvar *icvar;
 	GET_V_IFACE_CURRENT(GetEngineFactory, icvar, ICvar, CVAR_INTERFACE_VERSION);
@@ -569,6 +573,19 @@ void *D2Fixups::ResolveSymbol(const char *symbol, GameLibraryType type)
 
 bool D2Fixups::Hook_GameInit()
 {
+	// 2014-11-20 update removed CNetworkSystem::SetMultiplayer. That is where these would normally get called.
+	// Without the callback, the RCon server never initializes.
+#ifdef _WIN32
+	const size_t cbOffset = 204;
+#else
+	const size_t cbOffset = 196;
+#endif
+	CUtlVector<INetworkConfigChanged *> &callbacks = *(CUtlVector<INetworkConfigChanged *> *)((intptr_t) netsys + cbOffset);
+	FOR_EACH_VEC(callbacks, i)
+	{
+		callbacks[i]->OnNetworkConfigChanged(true);
+	}
+
 	static ConVarRef dota_local_addon_game("dota_local_addon_game");
 
 	// If we're not running a custom game when 'map' is executed, then nothing to do.
