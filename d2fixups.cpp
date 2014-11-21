@@ -281,9 +281,9 @@ void D2Fixups::RefreshWaitForPlayersCount()
 #if defined(WIN32)
 	// Find unique string "exec lan_server.cfg\n".
 	// In same block as "tutorial_m1", above it, look for global ptr being set to new value.
-	static const char * const sig = "\xC6\x81\x2A\x2A\x2A\x2A\x01\x8D\x8E\x2A\x2A\x2A\x2A\x8B\x01\xFF\x50\x08\x8B\x0D\x2A\x2A\x2A\x2A\xA3";
-	static const int siglen = 25;
-	static const int offset = 25;
+	static const char * const sig = "\x8B\x86\x2A\x2A\x2A\x2A\x8D\x8E\x2A\x2A\x2A\x2A\xFF\x50\x08\x8B\x0D\x2A\x2A\x2A\x2A\xA3\x2A\x2A\x2A\x2A\x83";
+	static const int siglen = 27;
+	static const int offset = 22;
 #elif defined(LINUX)
 	// Find unique string "Loading unit...%s\n".
 	// At the beginning of the function, the first call will be to DOTAGameManager().
@@ -293,11 +293,11 @@ void D2Fixups::RefreshWaitForPlayersCount()
 	static const int offset = 13;
 	// Look for "exec lan_server.cfg\n" as on Windows
 	// Toward the beginning of the function, DOTAGameManager() is called and the mov instruction after it should have the needed offset.
-	static const int playerCountOffset = 0x3DC;
+	static const int playerCountOffset = 0x3E4;
 #elif defined(OSX)
 	static const char * const symbol = "_Z15DOTAGameManagerv";
 	// This offset can be found the same way as on Linux except that that mov instruction with an offset is directly before a cmp instruction testing for a value of 10.
-	static const int playerCountOffset = 0x3DC;
+	static const int playerCountOffset = 0x3E4;
 #endif
 
 	static void *addr = NULL;
