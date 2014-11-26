@@ -362,7 +362,7 @@ void D2Fixups::RefreshWaitForPlayersCount()
 			addr = (void *)((intp)addr + offset + 4 + funcOffset);
 		}
 #elif defined(OSX)
-		addr = D2Fixups::ResolveSymbol(symbol, Server);
+		addr = (IServer *)D2Fixups::ResolveSymbol(symbol, Server);
 #endif
 
 		if (addr)
