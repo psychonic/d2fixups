@@ -605,19 +605,6 @@ void *D2Fixups::ResolveSymbol(const char *symbol, GameLibraryType type)
 
 bool D2Fixups::Hook_GameInit()
 {
-	// 2014-11-20 update removed CNetworkSystem::SetMultiplayer. That is where these would normally get called.
-	// Without the callback, the RCon server never initializes.
-#ifdef _WIN32
-	const size_t cbOffset = 204;
-#else
-	const size_t cbOffset = 196;
-#endif
-	CUtlVector<INetworkConfigChanged *> &callbacks = *(CUtlVector<INetworkConfigChanged *> *)((intptr_t) netsys + cbOffset);
-	FOR_EACH_VEC(callbacks, i)
-	{
-		callbacks[i]->OnNetworkConfigChanged(true);
-	}
-
 	static ConVarRef dota_local_addon_game("dota_local_addon_game");
 
 	// If we're not running a custom game when 'map' is executed, then nothing to do.
@@ -714,6 +701,21 @@ bool D2Fixups::Hook_IsServerLocalOnly()
 
 void D2Fixups::Hook_GameServerSteamAPIActivated()
 {
+	// 2014-11-20 update removed CNetworkSystem::SetMultiplayer. That is where these would normally get called.
+	// Without the callback, the RCon server never initializes.
+	// Additionally, the server socket is now not opened up until SV_ActivateServer, after ServerActivate is called in the game binary.
+	// This is the next easily-hooked function after the socket is opened.
+#ifdef _WIN32
+	const size_t cbOffset = 204;
+#else
+	const size_t cbOffset = 196;
+#endif
+	CUtlVector<INetworkConfigChanged *> &callbacks = *(CUtlVector<INetworkConfigChanged *> *)((intptr_t) netsys + cbOffset);
+	FOR_EACH_VEC(callbacks, i)
+	{
+		callbacks[i]->OnNetworkConfigChanged(true);
+	}
+
 	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
 	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
 
