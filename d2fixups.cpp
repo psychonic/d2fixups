@@ -206,7 +206,7 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 		META_CONPRINT(MSG_TAG "Warning: Failed to find IServer. SourceTV kick fix will not be available.\n");
 	}
 #elif defined(OSX)
-	server = D2Fixups::ResolveSymbol("sv", Engine);
+	server = (IServer *)D2Fixups::ResolveSymbol("sv", Engine);
 #endif
 
 	ICvar *icvar;
@@ -362,7 +362,7 @@ void D2Fixups::RefreshWaitForPlayersCount()
 			addr = (void *)((intp)addr + offset + 4 + funcOffset);
 		}
 #elif defined(OSX)
-		addr = (IServer *)D2Fixups::ResolveSymbol(symbol, Server);
+		addr = D2Fixups::ResolveSymbol(symbol, Server);
 #endif
 
 		if (addr)
