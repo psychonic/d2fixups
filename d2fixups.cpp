@@ -31,7 +31,6 @@
 #include <iclient.h>
 #include <icvar.h>
 #include <iserver.h>
-#include <networksystem/inetworksystem.h>
 #include <tier0/platform.h>
 #include <tier1/fmtstr.h>
 #include <tier1/iconvar.h>
@@ -114,7 +113,6 @@ static IServerGameDLL *gamedll = NULL;
 static IFileSystem *filesystem = NULL;
 static IGameEventManager2 *eventmgr = NULL;
 static ISteamGameCoordinator *gamecoordinator = NULL;
-static INetworkSystem *netsys = NULL;
 static IServer *server = NULL;
 
 ConVar dota_local_custom_allow_multiple("dota_local_custom_allow_multiple", "0", FCVAR_RELEASE, "0 - Only load selected mode's addon. 1 - Load all addons giving selected mode priority");
@@ -190,7 +188,6 @@ bool D2Fixups::InitGlobals(char *error, size_t maxlen)
 	GET_V_IFACE_CURRENT(GetEngineFactory, engine, IVEngineServer, INTERFACEVERSION_VENGINESERVER);
 	GET_V_IFACE_CURRENT(GetEngineFactory, eventmgr, IGameEventManager2, INTERFACEVERSION_GAMEEVENTSMANAGER2);
 	GET_V_IFACE_CURRENT(GetFileSystemFactory, filesystem, IFileSystem, FILESYSTEM_INTERFACE_VERSION);
-	GET_V_IFACE_CURRENT(GetEngineFactory, netsys, INetworkSystem, NETWORKSYSTEM_INTERFACE_VERSION);
 
 #if defined(WIN32)
 	static const char s_IServerFinder [] = "\x55\x8B\xEC\x56\xFF\x2A\x2A\xB9\x2A\x2A\x2A\x2A\xE8\x2A\x2A\x2A\x2A\x8B\xF0";
@@ -703,21 +700,6 @@ bool D2Fixups::Hook_IsServerLocalOnly()
 
 void D2Fixups::Hook_GameServerSteamAPIActivated()
 {
-	// 2014-11-20 update removed CNetworkSystem::SetMultiplayer. That is where these would normally get called.
-	// Without the callback, the RCon server never initializes.
-	// Additionally, the server socket is now not opened up until SV_ActivateServer, after ServerActivate is called in the game binary.
-	// This is the next easily-hooked function after the socket is opened.
-#ifdef _WIN32
-	const size_t cbOffset = 204;
-#else
-	const size_t cbOffset = 196;
-#endif
-	CUtlVector<INetworkConfigChanged *> &callbacks = *(CUtlVector<INetworkConfigChanged *> *)((intptr_t) netsys + cbOffset);
-	FOR_EACH_VEC(callbacks, i)
-	{
-		callbacks[i]->OnNetworkConfigChanged(true);
-	}
-
 	HSteamUser hSteamUser = SteamGameServer_GetHSteamUser();
 	HSteamPipe hSteamPipe = SteamGameServer_GetHSteamPipe();
 
@@ -828,7 +810,7 @@ const char *D2Fixups::GetLicense()
 
 const char *D2Fixups::GetVersion()
 {
-	return "2.1.1";
+	return "2.1.2";
 }
 
 const char *D2Fixups::GetDate()
